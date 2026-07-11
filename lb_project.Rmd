@@ -1,0 +1,277 @@
+---
+title: "lb_project"
+output: html_document
+date: "2026-07-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# LB Project
+
+This project is intended to help you apply your skills in R in a way that would be conducive for collaborating or creating reproducible analyses.
+
+
+## Data Used
+
+Identify a dataset to analyze. Remember that if you share the data you must **not violate any privacy restrictions**
+
+If you don't have your own data, options for places to find data are listed on https://daseh.org.
+
+You might start by setting up an R Project, importing your data, previewing the data, etc. 
+
+```{r}
+library(tidyverse)
+library(broom)
+library(naniar)
+library(maps)
+library(usmap)
+library(tidycensus)
+library(scales)
+dat <- read_csv("https://drive.usercontent.google.com/download?id=1V_1-6dfl88E6R_F3NbedqUCjmFabyMJ7&export=download&authuser=0&confirm=t&uuid=9b3505cb-8033-4650-be3e-24d2e914609c&at=AAINaIJgGDkjG47-KSbtWO1UTWTq:1782243211418")
+dat
+```
+
+**describe** what your data looks like and **where** you got it. Identify what the variables and samples are, or point to a data dictionary. Describe how the data was originally created. 
+
+US census data for Long Beach, California. Wide data with 26 columns. I got this cleaned US census data for Long Beach from Data Day 2026 at CSULB. Samples are surveyed individuals and the variables are; 
+SERIALNO
+Pwgtp 
+Year
+age
+Sex
+Location
+Race_eth
+Age_cat
+Education
+Personal_income
+Household_income
+Class
+Has_medicaid
+Has_health_insurance
+Has_disability
+Has_food_stamps
+Tenure
+Income_to_poverty_ratio
+Below_poverty_line
+Household
+Hisp_Ethnicity
+AAPI_Ethnicity
+
+```{r}
+nrow(dat)
+ncol(dat)
+colnames(dat)
+miss_var_which(dat)
+```
+
+
+# Data Cleaning/Wrangling
+
+Perform any data subsetting, cleaning, or manipulation methods that were described in this course on your data. Examples are: renaming the columns, recoding values, reshaping the data, filtering the data etc. 
+
+You might also research other methods to include here, especially if your data is very unique.
+```{r}
+#data subset for 2023, exclude 2021
+dat |> pull(year) |> range()
+dat |> filter(year == 2021) |> nrow()
+dat |> filter(year == 2022) |> nrow()
+dat |> filter(year == 2023) |> nrow()
+subdat <- dat |> filter(year == 2023)
+
+subdat |> pull("has_medicaid") |> class()
+#turn character columns into numeric to calculate percentages later
+subdat <- subdat |> mutate(has_medicaid = if_else(has_medicaid == "Yes", 1L, 0L),
+has_health_insurance = if_else(has_health_insurance == "Yes", 1L, 0L),
+has_disability = if_else(has_disability == "Yes", 1L, 0L),
+has_food_stamps = if_else(has_food_stamps == "Yes", 1L, 0L)
+)
+
+#public assistance column has lots of 0 and -1 which will mess with averages later, I'll replace with na and omit during calculations 
+#In U.S. Census Bureau microdata a -1 is a missing data flag or a placeholder.
+subdat <- subdat |> replace_with_na(replace = list(public_assistance_income = c(-1,0)))
+subdat
+```
+
+
+
+
+
+# Data Analysis
+
+Perform a **simple analysis** of your data. This can involve summarizing the data to describe aspects about it (quartiles, means, range etc.) or a simple statistical test. 
+
+Don't forget to describe what analysis you performed and why. Provide some simple **interpretation** about what your analysis might indicate about your data.
+
+```{r}
+dat |> pull(location) |> unique() 
+#total amount surveyed individuals per lb neighborhood
+east_total <- subdat |> filter(location == "East Long Beach") |> nrow()
+south_total <- subdat |> filter(location == "South Long Beach") |> nrow()
+north_total <- subdat |> filter(location == "North Long Beach") |> nrow()
+central_total <- subdat |> filter(location == "Central Long Beach") |> nrow()
+
+#calculate percentage of surveyed individuals on public assistance (medicaid, disability, food stamps) or have health insurance
+
+#health insurance
+health_e <- subdat |> filter(location == "East Long Beach") |> pull(has_health_insurance) |> sum() / east_total 
+health_s <- subdat |> filter(location == "South Long Beach") |> pull(has_health_insurance) |> sum() / south_total
+health_n <- subdat |> filter(location == "North Long Beach") |> pull(has_health_insurance) |> sum() / north_total
+health_c <- subdat |> filter(location == "Central Long Beach") |> pull(has_health_insurance) |> sum() / central_total
+
+percentage <- function(x) x * 100
+health_e <- percentage(x = health_e)
+health_s <- percentage(x = health_s)
+health_n <- percentage(x = health_n)
+health_c <- percentage(x = health_c)
+
+#medicaid
+med_e <- subdat |> filter(location == "East Long Beach") |> pull(has_medicaid) |> sum() / east_total 
+med_s <- subdat |> filter(location == "South Long Beach") |> pull(has_medicaid) |> sum() / south_total
+med_n <- subdat |> filter(location == "North Long Beach") |> pull(has_medicaid) |> sum() / north_total
+med_c <- subdat |> filter(location == "Central Long Beach") |> pull(has_medicaid) |> sum() / central_total
+
+med_e <- percentage(x = med_e)
+med_s <- percentage(x = med_s)
+med_n <- percentage(x = med_n)
+med_c <- percentage(x = med_c)
+
+#disability
+able_e <- subdat |> filter(location == "East Long Beach") |> pull(has_disability) |> sum() / east_total 
+able_s <- subdat |> filter(location == "South Long Beach") |> pull(has_disability) |> sum() / south_total
+able_n <- subdat |> filter(location == "North Long Beach") |> pull(has_disability) |> sum() / north_total
+able_c <- subdat |> filter(location == "Central Long Beach") |> pull(has_disability) |> sum() / central_total
+
+able_e <- percentage(x = able_e)
+able_s <- percentage(x = able_s)
+able_n <- percentage(x = able_n)
+able_c <- percentage(x = able_c)
+
+#food stamps
+food_e <- subdat |> filter(location == "East Long Beach") |> pull(has_food_stamps) |> sum() / east_total 
+food_s <- subdat |> filter(location == "South Long Beach") |> pull(has_food_stamps) |> sum() / south_total
+food_n <- subdat |> filter(location == "North Long Beach") |> pull(has_food_stamps) |> sum() / north_total
+food_c <- subdat |> filter(location == "Central Long Beach") |> pull(has_food_stamps) |> sum() / central_total
+
+food_e <- percentage(x = food_e)
+food_s <- percentage(x = food_s)
+food_n <- percentage(x = food_n)
+food_c <- percentage(x = food_c)
+
+#average personal income per neighborhood
+money_e <- subdat |> filter(location == "East Long Beach") |> pull(personal_income) |> mean()
+money_s <- subdat |> filter(location == "South Long Beach") |> pull(personal_income) |> mean()
+money_n <- subdat |> filter(location == "North Long Beach") |> pull(personal_income) |> mean()
+money_c <- subdat |> filter(location == "Central Long Beach") |> pull(personal_income) |> mean()
+
+#average household income per neighborhood
+house_e <- subdat |> filter(location == "East Long Beach") |> pull(household_income) |> mean()
+house_s <- subdat |> filter(location == "South Long Beach") |> pull(household_income) |> mean()
+house_n <- subdat |> filter(location == "North Long Beach") |> pull(household_income) |> mean()
+house_c <- subdat |> filter(location == "Central Long Beach") |> pull(household_income) |> mean()
+
+
+#how many people have public assistance income in long beach total: 80
+public <- subdat |>  na.omit() |> nrow()
+
+#percentage people have public assistance income in long beach per neighborhood
+avg_pub_e <- subdat |> filter(location == "East Long Beach") |> na.omit() |> nrow() / east_total
+avg_pub_e <- percentage(x = avg_pub_e)
+
+avg_pub_s <- subdat |> filter(location == "South Long Beach") |> na.omit() |> nrow() / south_total
+avg_pub_s <- percentage(x = avg_pub_s)
+
+avg_pub_n <- subdat |> filter(location == "North Long Beach") |> na.omit() |> nrow() / north_total
+avg_pub_n <- percentage(x = avg_pub_n)
+
+avg_pub_c <- subdat |> filter(location == "Central Long Beach") |> na.omit() |> nrow() / central_total
+avg_pub_c <- percentage(x = avg_pub_c)
+
+#average public assistance income per neighborhood
+public_e <- subdat |> filter(location == "East Long Beach") |> na.omit() |> pull(public_assistance_income) |> mean()
+public_s <- subdat |> filter(location == "South Long Beach") |> na.omit() |> pull(public_assistance_income) |> mean()
+public_n <- subdat |> filter(location == "North Long Beach") |> na.omit() |> pull(public_assistance_income) |> mean()
+public_c <- subdat |> filter(location == "Central Long Beach") |> na.omit() |> pull(public_assistance_income) |> mean()
+```
+
+# Data Visualization
+
+Create some visualizations of your data using the esquisse app or the ggplot2 package.
+
+```{r}
+#number of surveyed individuals per lb neighborhood in 2023
+total_data <- data.frame(Name = c("East", "South", "North", "Central"), Value = c(east_total, south_total, north_total, central_total))
+
+ggplot(total_data, aes(x = Name, y = Value, fill = Name)) + geom_col(stat = "identity", width = 0.5) + scale_y_continuous(expand = expansion(mult = c(0, 0.05)), breaks = seq(0, 1500, by = 300)) + xlab("Location") + ggtitle("Number of Surveyed Long Beach Residents in 2023") + ylab("Amount of People") + theme(legend.position = "none") + theme_classic()
+
+#percentage has health insurance per neighborhood
+health_data <- data.frame(Name = c("East", "South", "North", "Central"), Value = c(health_e, health_s, health_n, health_c))
+
+ggplot(health_data, aes(x = Name, y = Value, fill = Name)) + geom_col(stat = "identity", width = 0.5) + coord_cartesian(ylim = c(50, 100)) + xlab("Location") + ggtitle("Long Beach Health Insurance Coverage") + scale_y_continuous(breaks = seq(50, 100, by = 5), labels = c("50%", "", "60%", "", "70%", "", "80%", "", "90%", "", "100%")) + ylab("Percent") + theme(legend.position = "none") + theme_classic()
+
+#percentage has medicaid per neighborhood
+aid_data <- data.frame(Name = c("East", "South", "North", "Central"), Value = c(med_e, med_s, med_n, med_c))
+
+ggplot(aid_data, aes(x = Name, y = Value, fill = Name)) + geom_col(stat = "identity", width = 0.5) + scale_y_continuous(expand = expansion(mult = c(0, 0.05)), labels = scales::label_percent(scale = 1)) + xlab("Location") + ggtitle("Long Beach Medicaid Coverage") + ylab("Percent") + theme(legend.position = "none") + theme_classic()
+
+#percentage has disability per neighborhood
+able_data <- data.frame(Name = c("East", "South", "North", "Central"), Value = c(able_e, able_s, able_n, able_c))
+
+ggplot(able_data, aes(x = Name, y = Value, fill = Name)) + geom_col(stat = "identity", width = 0.5) + scale_y_continuous(expand = expansion(mult = c(0, 0.05)), labels = scales::label_percent(scale = 1)) + xlab("Location") + ylab("Percent") + ggtitle("Surveyed LB Residents with a Disability") + theme(legend.position = "none") + theme_classic()
+
+#percent is on food stamps per neighborhood
+food_data <- data.frame(Name = c("East", "South", "North", "Central"), Value = c(food_e, food_s, food_n, food_c))
+
+ggplot(food_data, aes(x = Name, y = Value, fill = Name)) + geom_col(stat = "identity", width = 0.5) + scale_y_continuous(expand = expansion(mult = c(0, 0.05)), labels = scales::label_percent(scale = 1)) + xlab("Location") + ylab("Percent") + ggtitle("Surveyed LB Residents on Food Stamps") + theme(legend.position = "none") + theme_classic()
+
+#percentage people have public assistance income in long beach per neighborhood
+pub_data <- data.frame(Name = c("East", "South", "North", "Central"), Value = c(avg_pub_e, avg_pub_s, avg_pub_n, avg_pub_c))
+
+ggplot(pub_data, aes(x = Name, y = Value, fill = Name)) + geom_col(stat = "identity", width = 0.5) + scale_y_continuous(expand = expansion(mult = c(0, 0.05)), labels = scales::label_percent(scale = 1)) + xlab("Location") + ylab("Percent") + ggtitle("Surveyed LB Residents with Public Assistance Income") + theme(legend.position = "none") + theme_classic()
+
+#average public assistance income per neighborhood
+pub_avg_data <- data.frame(Name = c("East", "South", "North", "Central"), Value = c(public_e, public_s, public_n, public_c))
+
+ggplot(pub_avg_data, aes(x = Name, y = Value, fill = Name)) + geom_col(stat = "identity", width = 0.5) + scale_y_continuous(expand = expansion(mult = c(0, 0.05)), labels = label_dollar()) + xlab("Location") + ylab("Income") + ggtitle("Average Public Assitance Income") + theme(legend.position = "none") + theme_classic()
+
+#average personal income per neighborhood
+money_data <- data.frame(Name = c("East", "South", "North", "Central"), Value = c(money_e, money_s, money_n, money_c))
+
+ggplot(money_data, aes(x = Name, y = Value, fill = Name)) + geom_col(stat = "identity", width = 0.5) + scale_y_continuous(expand = expansion(mult = c(0, 0.05)), labels = label_dollar()) + xlab("Location") + ylab("Income") + ggtitle("Average Personal Income") + theme(legend.position = "none") + theme_classic()
+
+#average household income per neighborhood
+house_data <- data.frame(Name = c("East", "South", "North", "Central"), Value = c(house_e, house_s, house_n, house_c)) 
+
+ggplot(house_data, aes(x = Name, y = Value, fill = Name)) + geom_col(stat = "identity", width = 0.5) + scale_y_continuous(expand = expansion(mult = c(0, 0.05)), labels = label_dollar()) + xlab("Location") + ylab("Income") + ggtitle("Average Household Income") + theme(legend.position = "none") + theme_classic()
+```
+# Please include additional sections as desired.
+
+```{r}
+#tried a bar plot for min, mean, max of household income
+east_min <- subdat |> filter(location == "East Long Beach") |> pull(household_income) |> min()
+east_max <- subdat |> filter(location == "East Long Beach") |> pull(household_income) |> max()
+south_min <- subdat |> filter(location == "South Long Beach") |> pull(household_income) |> min()
+south_max <- subdat |> filter(location == "South Long Beach") |> pull(household_income) |> max()
+north_min <- subdat |> filter(location == "North Long Beach") |> pull(household_income) |> min()
+north_max <- subdat |> filter(location == "North Long Beach") |> pull(household_income) |> max()
+cen_min <- subdat |> filter(location == "Central Long Beach") |> pull(household_income) |> min()
+cen_max <- subdat |> filter(location == "Central Long Beach") |> pull(household_income) |> max()
+
+
+plot_data <- data.frame(Name = c("East", "South", "North", "Central"), Value = c(east_min, east_max, house_e, south_min, south_max, house_s, north_min, north_max, house_n, cen_min, cen_max, house_c ))
+ggplot(data = plot_data, aes(x = Name, y = Value)) + geom_point(aes(colour = factor(Name))) + scale_y_continuous(breaks = seq(-70000, 1000000, by = 50000), labels = c("-70,000", "", "30,000", "", "130,000", "", "230,000", "", "330,000", "", "430,000", "", "530,000", "", "630,000", "", "730,000", "", "830,000", "", "930,000", "")) + xlab("Location") + ylab("Income") + ggtitle("Min, Mean, and Max Household Incomes") + theme_classic() + theme(legend.position = "none")
+
+
+```
+
+
+# Versions
+
+Include some information about the version of R and the packages you are using by running sessionInfo().
+
+```{r}
+sessionInfo()
+```
+
+Render your document to an html or pdf using the "Knit" button.
